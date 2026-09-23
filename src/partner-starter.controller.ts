@@ -5,6 +5,7 @@ import {
   ExelixiPartnerHost,
   PARTNER_SWAGGER_TAG,
 } from '@jsotoexelixitech/nest-api-sdk';
+import { DatabaseService } from './database/database.service';
 
 @ApiTags(PARTNER_SWAGGER_TAG)
 @Controller('v1/partner/starter')
@@ -12,6 +13,7 @@ export class PartnerStarterController {
   constructor(
     @Inject(EXELIXI_PARTNER_HOST)
     private readonly host: ExelixiPartnerHost,
+    private readonly db: DatabaseService,
   ) {}
 
   @Get('health')
@@ -32,6 +34,30 @@ export class PartnerStarterController {
       status: true,
       module: '@exelixi/partner-api-starter',
       env: this.host.getConfig('NODE_ENV') ?? 'unknown',
+    };
+  }
+
+  @Get('db-test')
+  @ApiOperation({
+    summary: 'Test de conectividad y type parsers con PostgreSQL',
+    description: 'Ejecuta una consulta de prueba usando parámetros nombrados y verifica parsers numéricos.',
+  })
+  async dbTest() {
+    this.host.log('log', 'GET /partner/starter/db-test', 'PartnerStarter');
+    const rows = await this.db.executeQuery(
+      'SELECT NOW() as server_time, @testNumber::int8 as parsed_bigint, @testDecimal::numeric as parsed_numeric, @status as status',
+      {
+        testNumber: '1234567890123',
+        testDecimal: '89.75',
+        status: 'ok',
+      },
+    );
+
+    return {
+      success: true,
+      result: rows[0],
+      bigintType: typeof rows[0]?.parsed_bigint,
+      numericType: typeof rows[0]?.parsed_numeric,
     };
   }
 }

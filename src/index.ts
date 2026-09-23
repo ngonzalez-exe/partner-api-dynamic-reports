@@ -1,5 +1,6 @@
 export { PartnerStarterModule } from './partner-starter.module';
 export { PartnerStarterController } from './partner-starter.controller';
+export * from './database';
 
 import { PartnerStarterModule } from './partner-starter.module';
 
