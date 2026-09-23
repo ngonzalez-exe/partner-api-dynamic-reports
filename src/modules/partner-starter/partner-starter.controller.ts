@@ -5,7 +5,7 @@ import {
   ExelixiPartnerHost,
   PARTNER_SWAGGER_TAG,
 } from '@jsotoexelixitech/nest-api-sdk';
-import { DatabaseService } from './database/database.service';
+import { DatabaseService } from '../../database/database.service';
 
 @ApiTags(PARTNER_SWAGGER_TAG)
 @Controller('v1/partner/starter')

@@ -1,4 +1,4 @@
-﻿# Plantilla partner-api-starter
+# Plantilla partner-api-starter
 
 Copia esta carpeta a **tu repo privado**. No clona ningun repo de Exelixi.
 
@@ -24,7 +24,7 @@ npm run build
 
 ## 4. Desarrollar
 
-- Edita `src/partner-starter.controller.ts` (rutas, logica).
+- Edita `src/modules/partner-starter/partner-starter.controller.ts` (rutas, logica).
 - Renombra archivos/clases segun tu modulo.
 - Usa `@ApiTags(PARTNER_SWAGGER_TAG)` para que aparezca en Swagger bajo **Partner**.
 - Exporta `register()` desde `src/index.ts` (ya viene en la plantilla).
