@@ -1,17 +1,27 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
-
-export interface ReportesRequestUser {
-  cusuario: number;
-}
-
-export type ReportesHeaders = Record<string, string | string[] | undefined>;
+import { DynamicSchemasService } from '../dynamic-schemas/dynamic-schemas.service';
+import { PolizasService } from '../polizas/polizas.service';
+import { ComisionesService } from '../comisiones/comisiones.service';
+export {
+  ReportesHeaders,
+  ReportesRequestUser,
+} from './utils/request-context.util';
+import type {
+  ReportesHeaders,
+  ReportesRequestUser,
+} from './utils/request-context.util';
 
 @Injectable()
 export class ComponentsService {
   private readonly logger = new Logger(ComponentsService.name);
 
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly dynamicSchemasService: DynamicSchemasService,
+    private readonly polizasService: PolizasService,
+    private readonly comisionesService: ComisionesService,
+  ) {}
 
   async execute(
     slug: string,
@@ -34,12 +44,31 @@ export class ComponentsService {
     user: ReportesRequestUser | null,
     headers: ReportesHeaders,
   ): Promise<any> {
-    this.logger.log(`[getFiltros] slug=${slug}, user=${user?.cusuario}`);
-    // Pendiente de lógica de negocio personalizada
-    return {
+    const normalizedSlug = String(slug || '').trim().toUpperCase();
+    this.logger.log(`[getFiltros] slug=${normalizedSlug}, user=${user?.cusuario}`);
+
+    // Enrutamiento por Adapter específico
+    if (normalizedSlug === 'RPT_POLIZAS') {
+      return this.polizasService.getFiltros(user, headers, query);
+    }
+
+    if (normalizedSlug === 'RPT_COMISIONES') {
+      return this.comisionesService.getFiltros(user, headers, query);
+    }
+
+    // Slugs dinámicos sin adapter específico: devolver únicamente la lista de campos activos
+    const schema = await this.dynamicSchemasService.getSchema(
       slug,
-      filtros: [],
-    };
+      user,
+      headers,
+      query,
+    );
+    if (schema?.error) {
+      return schema;
+    }
+
+    const campos = (schema.campos || []).filter((c: any) => !c.hidden);
+    return { campos };
   }
 
   async getConfiguracion(

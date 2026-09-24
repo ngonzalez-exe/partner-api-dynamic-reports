@@ -223,6 +223,28 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     return { transformedSql, values };
   }
 
+  private parsePgArray(value: unknown): string[] {
+    if (Array.isArray(value)) return value.map(String);
+    if (typeof value !== 'string') return [];
+    const trimmed = value.trim();
+    if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return [];
+    const inner = trimmed.slice(1, -1).trim();
+    if (!inner) return [];
+    return inner.split(',').map((s) => s.trim().replace(/^"(.*)"$/, '$1'));
+  }
+
+  private canonicalParamName(name: string): string {
+    if (!name) return '';
+    return String(name)
+      .toLowerCase()
+      .replace(/^p_/, '')
+      .replace(/^x/, '')
+      .replace(/^c/, '')
+      .replace(/^id_/, '')
+      .replace(/_json$/, '')
+      .replace(/_/g, '');
+  }
+
   private async invokeRoutine<T extends QueryResultRow = any>(
     routineMeta: any,
     params?: Record<string, unknown>,
@@ -233,13 +255,14 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
     const values: unknown[] = [];
     const placeholders: string[] = [];
+    const parsedModes = this.parsePgArray(proargmodes);
 
     if (proargnames && Array.isArray(proargnames)) {
       let valueIndex = 1;
 
       for (let i = 0; i < proargnames.length; i++) {
         const argName = proargnames[i];
-        const mode = proargmodes ? proargmodes[i] : 'i';
+        const mode = parsedModes.length > i ? parsedModes[i] : 'i';
 
         // Solo procesar argumentos de entrada: 'i' (IN), 'b' (INOUT), 'v' (VARIADIC)
         if (mode === 'i' || mode === 'b' || mode === 'v' || !mode) {
@@ -314,6 +337,14 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     for (const key of Object.keys(params)) {
       if (key.toLowerCase() === lowerArg || key.toLowerCase() === strippedArg.toLowerCase()) {
         return params[key];
+      }
+    }
+
+    // 4. Coincidencia canonica (p.ej: cusuario -> p_usuario, xnombre_interno -> p_nombre_interno)
+    const canonicalArg = this.canonicalParamName(argName);
+    for (const [key, value] of Object.entries(params)) {
+      if (this.canonicalParamName(key) === canonicalArg) {
+        return value;
       }
     }
 
