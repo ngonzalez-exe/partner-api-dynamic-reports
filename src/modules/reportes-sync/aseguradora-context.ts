@@ -1,6 +1,6 @@
 /**
- * Contexto de aseguradora desde request.
- * Orden de resolución: header X-Aseguradora-Id -> body.sync -> body.filtros -> body top-level.
+ * Contexto de aseguradora desde request (sin redeploy).
+ * Orden: header X-Aseguradora-Id → body.sync → body.filtros → body top-level.
  */
 function pickHeader(
   headers: Record<string, unknown> | null | undefined,
