@@ -5,6 +5,7 @@ import { DatabaseModule } from '../../database/database.module';
 import { DynamicSchemasModule } from '../dynamic-schemas/dynamic-schemas.module';
 import { PolizasModule } from '../polizas/polizas.module';
 import { ComisionesModule } from '../comisiones/comisiones.module';
+import { ReportesSyncModule } from '../reportes-sync/reportes-sync.module';
 
 @Module({
   imports: [
@@ -12,9 +13,11 @@ import { ComisionesModule } from '../comisiones/comisiones.module';
     DynamicSchemasModule,
     PolizasModule,
     ComisionesModule,
+    ReportesSyncModule,
   ],
   controllers: [ComponentsController],
   providers: [ComponentsService],
   exports: [ComponentsService],
+
 })
 export class ComponentsModule {}

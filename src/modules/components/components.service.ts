@@ -3,6 +3,13 @@ import { DatabaseService } from '../../database/database.service';
 import { DynamicSchemasService } from '../dynamic-schemas/dynamic-schemas.service';
 import { PolizasService } from '../polizas/polizas.service';
 import { ComisionesService } from '../comisiones/comisiones.service';
+import { AseguradoraResolverService } from '../reportes-sync/aseguradora-resolver.service';
+import {
+  extractAseguradoraIdExplicit,
+  mergeAseguradoraIntoBody,
+  paginateRows,
+  resolvePagination,
+} from './utils/request-context.util';
 export {
   ReportesHeaders,
   ReportesRequestUser,
@@ -21,7 +28,101 @@ export class ComponentsService {
     private readonly dynamicSchemasService: DynamicSchemasService,
     private readonly polizasService: PolizasService,
     private readonly comisionesService: ComisionesService,
+    private readonly aseguradoraResolver: AseguradoraResolverService,
   ) {}
+
+  async enrichBodyWithAseguradora(
+    body: Record<string, unknown>,
+    headers: ReportesHeaders,
+  ): Promise<Record<string, unknown>> {
+    const explicit = extractAseguradoraIdExplicit(body || {}, headers || {});
+    const aseguradoraId = await this.aseguradoraResolver.resolveAseguradoraId(
+      explicit,
+      body || {},
+      headers || {},
+    );
+    return mergeAseguradoraIntoBody(body || {}, headers || {}, aseguradoraId);
+  }
+
+  buildPolizasAdapterBody(
+    body: Record<string, unknown>,
+    headers: ReportesHeaders,
+  ): Record<string, unknown> {
+    const filtros =
+      body && body.filtros && typeof body.filtros === 'object'
+        ? (body.filtros as Record<string, unknown>)
+        : {};
+    const { page, pageSize } = resolvePagination(body, headers);
+    const nullable = (value: unknown) => {
+      if (value === undefined || value === null) return null;
+      const text = String(value).trim();
+      return text === '' ? null : value;
+    };
+
+    return {
+      filtros: {
+        polzia: nullable(filtros.polzia ?? filtros.poliza ?? filtros.xpoliza ?? filtros.numero_poliza),
+        cramo: nullable(filtros.cramo ?? filtros.ramo),
+        cestatus: nullable(filtros.cestatus ?? filtros.estatus ?? filtros.estatus_poliza),
+        cproductor: nullable(filtros.cproductor ?? filtros.productor),
+        ccanal: nullable(filtros.ccanal ?? filtros.canal ?? filtros.canal_alterno),
+        moneda: nullable(filtros.moneda ?? filtros.cmoneda),
+        fdesdeemi: nullable(filtros.fdesdeemi ?? filtros.desdeEmision ?? filtros.desde_emision ?? filtros.desde),
+        fhastaemi: nullable(filtros.fhastaemi ?? filtros.hastaEmision ?? filtros.hasta_emision ?? filtros.hasta),
+        aseguradoraId: nullable(filtros.aseguradoraId ?? filtros.id_aseguradora),
+        id_aseguradora: nullable(filtros.id_aseguradora ?? filtros.aseguradoraId),
+      },
+      page,
+      pageSize,
+      sortField: body.sortField ?? 'fecha_emision_poliza',
+      sortDir: body.sortDir === 'desc' ? 'desc' : 'asc',
+      grilla: Array.isArray(body?.grilla) ? body.grilla : [],
+      kpis: Array.isArray(body?.kpis) ? body.kpis : [],
+      graficos: Array.isArray(body?.graficos) ? body.graficos : [],
+    };
+  }
+
+  buildComisionesAdapterBody(
+    body: Record<string, unknown>,
+    headers: ReportesHeaders,
+  ): Record<string, unknown> {
+    const filtros =
+      body && body.filtros && typeof body.filtros === 'object'
+        ? (body.filtros as Record<string, unknown>)
+        : {};
+    const { page, pageSize } = resolvePagination(body, headers);
+    const nullable = (value: unknown) => {
+      if (value === undefined || value === null) return null;
+      const text = String(value).trim();
+      return text === '' ? null : value;
+    };
+
+    return {
+      filtros: {
+        poliza: nullable(filtros.poliza ?? filtros.numero_poliza ?? filtros.polzia ?? filtros.xpoliza),
+        recibo: nullable(filtros.recibo ?? filtros.numero_recibo ?? filtros.cnrecibo),
+        cramo: nullable(filtros.cramo ?? filtros.id_ramo ?? filtros.ramo),
+        cproductor: nullable(filtros.cproductor ?? filtros.id_productor ?? filtros.productor),
+        cmoneda: nullable(filtros.cmoneda ?? filtros.moneda),
+        tipo_movimiento: nullable(filtros.tipo_movimiento ?? filtros.tipo_movimiento_codigo ?? filtros.imovcom),
+        estado_recibo: nullable(filtros.estado_recibo ?? filtros.iestadorec ?? filtros.estado),
+        tipoFecha: nullable(filtros.tipoFecha ?? filtros.tipo_fecha ?? 'fecha_cobro'),
+        desde: nullable(filtros.desde ?? filtros.fdesde ?? filtros.fdesdecob ?? filtros.finicio_cobro ?? filtros.fecha_desde),
+        hasta: nullable(filtros.hasta ?? filtros.fhasta ?? filtros.fhastacob ?? filtros.ffin_cobro ?? filtros.fecha_hasta),
+        fdesdepago: nullable(filtros.fdesdepago ?? filtros.finicio_pago),
+        fhastapago: nullable(filtros.fhastapago ?? filtros.ffin_pago),
+        aseguradoraId: nullable(filtros.aseguradoraId ?? filtros.id_aseguradora),
+        id_aseguradora: nullable(filtros.id_aseguradora ?? filtros.aseguradoraId),
+      },
+      page,
+      pageSize,
+      sortField: body.sortField ?? 'fecha_cobro_recibo',
+      sortDir: body.sortDir === 'desc' ? 'desc' : 'asc',
+      grilla: Array.isArray(body?.grilla) ? body.grilla : [],
+      kpis: Array.isArray(body?.kpis) ? body.kpis : [],
+      graficos: Array.isArray(body?.graficos) ? body.graficos : [],
+    };
+  }
 
   async execute(
     slug: string,
@@ -29,12 +130,41 @@ export class ComponentsService {
     user: ReportesRequestUser | null,
     headers: ReportesHeaders,
   ): Promise<any> {
-    this.logger.log(`[execute] slug=${slug}, user=${user?.cusuario}`);
-    // Pendiente de lógica de negocio personalizada
+    const normalizedSlug = String(slug || '').trim().toUpperCase();
+    this.logger.log(`[execute] slug=${normalizedSlug}, user=${user?.cusuario}`);
+
+    const enrichedBody = await this.enrichBodyWithAseguradora(body, headers);
+
+    if (normalizedSlug === 'RPT_POLIZAS') {
+      const adapterBody = this.buildPolizasAdapterBody(enrichedBody, headers);
+      return this.polizasService.execute(adapterBody, user, headers);
+    }
+
+    if (normalizedSlug === 'RPT_COMISIONES') {
+      const adapterBody = this.buildComisionesAdapterBody(enrichedBody, headers);
+      return this.comisionesService.execute(adapterBody, user, headers);
+    }
+
+    // Slugs dinámicos sin adapter dedicado
+    this.logger.log(`[execute] reporte dinámico sin adapter para slug=${normalizedSlug}`);
+    const result = await this.dynamicSchemasService.executeReport(
+      { nombreInterno: normalizedSlug },
+      enrichedBody,
+      user,
+      headers,
+    );
+    if (result?.error) return result;
+
+    const allRows = Array.isArray(result.grid) ? result.grid : [];
+    const { page, pageSize } = resolvePagination(enrichedBody, headers);
+    const pagedRows = paginateRows(allRows, page, pageSize);
+
     return {
-      slug,
-      executed: true,
-      data: [],
+      data: pagedRows,
+      grid: pagedRows,
+      kpis: result.kpis || [],
+      graphics: result.graphics || {},
+      total: allRows.length,
     };
   }
 
@@ -78,7 +208,6 @@ export class ComponentsService {
     headers: ReportesHeaders,
   ): Promise<any> {
     this.logger.log(`[getConfiguracion] slug=${slug}, user=${user?.cusuario}`);
-    // Pendiente de lógica de negocio personalizada
     return {
       slug,
       kpis: [],
@@ -93,7 +222,6 @@ export class ComponentsService {
     headers: ReportesHeaders,
   ): Promise<any> {
     this.logger.log(`[saveConfiguracion] slug=${slug}, user=${user?.cusuario}`);
-    // Pendiente de lógica de negocio personalizada
     return {
       slug,
       saved: true,
@@ -107,7 +235,6 @@ export class ComponentsService {
     headers: ReportesHeaders,
   ): Promise<any> {
     this.logger.log(`[getVistasConfiguracion] slug=${slug}, user=${user?.cusuario}`);
-    // Pendiente de lógica de negocio personalizada
     return {
       slug,
       vistas: [],
@@ -124,7 +251,6 @@ export class ComponentsService {
     this.logger.log(
       `[deleteVistaConfiguracion] slug=${slug}, cconfiguracion=${cconfiguracion}, user=${user?.cusuario}`,
     );
-    // Pendiente de lógica de negocio personalizada
     return {
       slug,
       cconfiguracion,
@@ -139,7 +265,6 @@ export class ComponentsService {
     headers: ReportesHeaders,
   ): Promise<any> {
     this.logger.log(`[exportData] slug=${slug}, user=${user?.cusuario}`);
-    // Pendiente de lógica de negocio personalizada
     return {
       slug,
       exported: true,
@@ -153,7 +278,6 @@ export class ComponentsService {
     headers: ReportesHeaders,
   ): Promise<any> {
     this.logger.log(`[getInsights] slug=${slug}, user=${user?.cusuario}`);
-    // Pendiente de lógica de negocio personalizada
     return {
       slug,
       insights: [],

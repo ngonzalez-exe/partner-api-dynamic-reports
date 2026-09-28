@@ -184,4 +184,131 @@ export class DynamicSchemasService {
       return { error: true, message: error.message };
     }
   }
+
+  buildPayloadForSp(body: Record<string, unknown> = {}): Record<string, unknown> {
+    const filtros =
+      body.filtros && typeof body.filtros === 'object'
+        ? (body.filtros as Record<string, unknown>)
+        : body;
+    return {
+      filtros,
+      grilla: Array.isArray(body.grilla) ? body.grilla : [],
+      kpis: Array.isArray(body.kpis) ? body.kpis : [],
+      graficos: Array.isArray(body.graficos) ? body.graficos : [],
+      bpreview: body.bpreview ? 1 : 0,
+      bexportar: body.bexportar ? 1 : 0,
+    };
+  }
+
+  async executeReportSp(
+    slug: string,
+    body: Record<string, unknown>,
+    cusuario: number | null,
+  ): Promise<any> {
+    try {
+      const payload = this.buildPayloadForSp(body);
+      const rows = await this.db.executeSP('ejecutar_reporte', {
+        p_usuario: cusuario,
+        p_nombre_interno: slug,
+        p_filtros_json: JSON.stringify(payload),
+      });
+
+      const list = Array.isArray(rows) ? rows : [];
+      // En PostgreSQL, ejecutar_reporte devuelve SETOF jsonb, que pg mapea como { ejecutar_reporte: { ... } }
+      const unpacked = list.map((r: any) => r.ejecutar_reporte ?? r);
+      return { recordsets: [unpacked] };
+    } catch (error: any) {
+      this.logger.error(`executeReportSp failed for '${slug}': ${error.message}`);
+      return { error: true, message: error.message };
+    }
+  }
+
+  async loadKpisFromDb(slug: string): Promise<any[]> {
+    try {
+      const rows = await this.db.executeQuery(
+        `SELECT
+            etiqueta_ui AS "xetiqueta_ui",
+            descripcion_ui AS "xdescripcion_ui",
+            clase_ui AS "clase_ui",
+            campo_metrica AS "xcampo_metrica",
+            operacion AS "ioperacion",
+            formato AS "xformato",
+            orden AS "norden",
+            condiciones_json AS "xcondiciones_json"
+         FROM kpis
+         WHERE id_esquema = (SELECT id FROM esquemas WHERE nombre_interno = @nombreInterno LIMIT 1)
+           AND activo = TRUE
+         ORDER BY orden ASC`,
+        { nombreInterno: slug },
+      );
+      return Array.isArray(rows) ? rows : [];
+    } catch (error: any) {
+      this.logger.warn(`Error loading KPIs from DB for '${slug}': ${error.message}`);
+      return [];
+    }
+  }
+
+  async loadGraficosFromDb(slug: string): Promise<any[]> {
+    try {
+      const rows = await this.db.executeQuery(
+        `SELECT
+            titulo_ui AS "titulo_ui",
+            tipo_grafico AS "tipo_grafico",
+            configuracion_json AS "configuracion_json",
+            orden AS "orden",
+            condiciones_json AS "condiciones_json",
+            ancho_grid AS "ancho_grid"
+         FROM graficos
+         WHERE id_esquema = (SELECT id FROM esquemas WHERE nombre_interno = @nombreInterno LIMIT 1)
+           AND activo = TRUE
+         ORDER BY orden ASC`,
+        { nombreInterno: slug },
+      );
+      if (!Array.isArray(rows)) return [];
+      return rows.map((g: any, index: number) => {
+        let conf: Record<string, any> = {};
+        const raw = g.configuracion_json;
+        if (typeof raw === 'string' && raw.trim() !== '') {
+          try {
+            conf = JSON.parse(raw);
+          } catch {
+            conf = {};
+          }
+        } else if (raw && typeof raw === 'object') {
+          conf = raw;
+        }
+        return {
+          id_grafico: g.titulo_ui || `grafico_${index + 1}`,
+          xtitulo_ui: g.titulo_ui,
+          itipo_grafico: g.tipo_grafico || 'BAR',
+          xcampo_dimension: conf['xcampo_dimension'] || conf['campo_dimension'] || '',
+          xcampo_metrica: conf['xcampo_metrica'] || conf['campo_metrica'] || '',
+          ioperacion: conf['ioperacion'] || conf['operacion'] || 'COUNT',
+          norden: typeof g.orden === 'number' ? g.orden : index + 1,
+          ntop: typeof conf['ntop'] === 'number' ? conf['ntop'] : null,
+          iorden: conf['iorden'] || 'DESC',
+          xcondiciones_json: g.condiciones_json || null,
+        };
+      });
+    } catch (error: any) {
+      this.logger.warn(`Error loading Graficos from DB for '${slug}': ${error.message}`);
+      return [];
+    }
+  }
+
+  async executeReport(
+    params: { nombreInterno: string },
+    body: Record<string, unknown>,
+    user?: ReportesRequestUser | null,
+    headers?: ReportesHeaders,
+  ): Promise<any> {
+    const slug = String(params.nombreInterno || '').trim().toUpperCase();
+    const cusuario = resolveCusuario({ user, body, headers });
+    const result = await this.executeReportSp(slug, body, cusuario);
+    if (result.error) return result;
+
+    const grid = result.recordsets?.[0] || [];
+    return { grid, kpis: [], graphics: {} };
+  }
 }
+

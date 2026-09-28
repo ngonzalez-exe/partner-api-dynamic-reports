@@ -140,3 +140,7 @@ export function opcionesFromCampo(campo: any): { cvalor: string; xdescripcion: s
     )
     .filter(Boolean) as { cvalor: string; xdescripcion: string }[];
 }
+
+export * from './reportes-metrics.util';
+export * from '../../reportes-sync/aseguradora-context';
+
