@@ -5,10 +5,11 @@ export { ComponentsController } from './modules/components/components.controller
 export { ComponentsService } from './modules/components/components.service';
 export { DynamicSchemasModule } from './modules/dynamic-schemas/dynamic-schemas.module';
 export { DynamicSchemasService } from './modules/dynamic-schemas/dynamic-schemas.service';
+export { DynamicSchemasController } from './modules/dynamic-schemas/dynamic-schemas.controller';
 export { PolizasModule } from './modules/polizas/polizas.module';
-export { PolizasService } from './modules/polizas/polizas.service';
+export { PolizasService, POLIZAS_COLUMN_ORDER } from './modules/polizas/polizas.service';
 export { ComisionesModule } from './modules/comisiones/comisiones.module';
-export { ComisionesService } from './modules/comisiones/comisiones.service';
+export { ComisionesService, COMISIONES_COLUMN_ORDER } from './modules/comisiones/comisiones.service';
 export * from './database';
 
 import { PartnerStarterModule } from './modules/partner-starter/partner-starter.module';

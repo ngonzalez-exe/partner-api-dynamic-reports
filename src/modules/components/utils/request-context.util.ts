@@ -141,6 +141,16 @@ export function opcionesFromCampo(campo: any): { cvalor: string; xdescripcion: s
     .filter(Boolean) as { cvalor: string; xdescripcion: string }[];
 }
 
+export function isReportesError(
+  result: unknown,
+): result is { error: true; message: string } {
+  return (
+    !!result &&
+    typeof result === 'object' &&
+    (result as { error?: unknown }).error === true
+  );
+}
+
 export * from './reportes-metrics.util';
 export * from '../../reportes-sync/aseguradora-context';
 

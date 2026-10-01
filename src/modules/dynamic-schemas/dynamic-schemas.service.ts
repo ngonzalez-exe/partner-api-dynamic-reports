@@ -5,6 +5,9 @@ import {
   ReportesRequestUser,
   resolveCusuario,
 } from '../components/utils/request-context.util';
+import {
+  DEFAULT_GRID_COLUMNS_BY_SLUG,
+} from './constants/default-columns.constants';
 
 const TIPO_CONTROL_MAP: Record<string, string> = {
   DATE: 'date',
@@ -114,33 +117,180 @@ export class DynamicSchemasService {
     return out;
   }
 
-  async getSchema(
-    slug: string,
-    user?: ReportesRequestUser | null,
-    headers?: ReportesHeaders,
-    query?: Record<string, unknown>,
-  ): Promise<any> {
-    const cusuario = resolveCusuario({ user, headers, query });
-
+  async getReports(): Promise<any> {
     try {
-      const rows = await this.db.executeSP('generar_esquema', {
-        cusuario,
-        p_usuario: cusuario,
-        xnombre_interno: slug,
-        p_nombre_interno: slug,
-      });
+      const rows = await this.db.executeQuery(
+        `SELECT id,
+                nombre_interno AS "nombreInterno",
+                titulo_ui AS nombre,
+                descripcion
+         FROM esquemas
+         WHERE tipo = 'R' AND activo = true
+         ORDER BY titulo_ui`,
+      );
+      return rows;
+    } catch (error: any) {
+      try {
+        const rows = await this.db.executeQuery(
+          `SELECT cesquema AS id,
+                  xnombre_interno AS "nombreInterno",
+                  xtitulo_ui AS nombre,
+                  xdescripcion AS descripcion
+           FROM fw_esquemas
+           WHERE itipo = 'R' AND (bactivo = 1 OR bactivo = TRUE)
+           ORDER BY xtitulo_ui`,
+        );
+        return rows;
+      } catch (fwErr: any) {
+        this.logger.error(`getReports failed: ${error.message}`);
+        return { error: true, message: error.message };
+      }
+    }
+  }
 
-      if (!rows || rows.length === 0) {
+  async getSchemaFallbackFromMetadata(nombreInterno: string): Promise<any> {
+    const slug = String(nombreInterno || '').trim().toUpperCase();
+    try {
+      let row: any = null;
+
+      try {
+        const rows = await this.db.executeQuery(
+          `SELECT
+              cesquema,
+              xnombre_interno,
+              xtitulo_ui,
+              icomportamiento,
+              itipo,
+              iformato_reporte,
+              xnombre_archivo,
+              xdelimitador
+            FROM fw_esquemas
+            WHERE UPPER(xnombre_interno) = @xnombre_interno AND (bactivo = 1 OR bactivo = TRUE)
+            LIMIT 1`,
+          { xnombre_interno: slug },
+        );
+        if (rows && rows.length > 0) {
+          row = rows[0];
+        }
+      } catch (fwErr: any) {
+        this.logger.warn(`fw_esquemas fallback fallo para '${slug}': ${fwErr.message}. Intentando tabla esquemas...`);
+      }
+
+      if (!row) {
+        try {
+          const altRows = await this.db.executeQuery(
+            `SELECT
+                id AS cesquema,
+                nombre_interno AS xnombre_interno,
+                titulo_ui AS xtitulo_ui,
+                comportamiento AS icomportamiento,
+                tipo AS itipo,
+                formato_reporte AS iformato_reporte,
+                nombre_archivo AS xnombre_archivo,
+                delimitador AS xdelimitador
+              FROM esquemas
+              WHERE UPPER(nombre_interno) = @xnombre_interno AND activo = TRUE
+              LIMIT 1`,
+            { xnombre_interno: slug },
+          );
+          if (altRows && altRows.length > 0) {
+            row = altRows[0];
+          }
+        } catch (esqErr: any) {
+          this.logger.warn(`esquemas query fallo para '${slug}': ${esqErr.message}`);
+        }
+      }
+
+      if (!row) {
         return { error: true, message: `Esquema '${slug}' no encontrado` };
       }
 
+      const defaultGrilla = DEFAULT_GRID_COLUMNS_BY_SLUG[slug]
+        ? [...DEFAULT_GRID_COLUMNS_BY_SLUG[slug]]
+        : [];
+
+      return {
+        nombreInterno: row.xnombre_interno || slug,
+        nombre: row.xtitulo_ui || slug,
+        cesquema: row.cesquema ?? null,
+        icomportamiento: row.icomportamiento || 'ES',
+        itipo: row.itipo || 'R',
+        iformato_reporte: row.iformato_reporte || 'XLSX',
+        xnombre_archivo: row.xnombre_archivo || null,
+        xdelimitador: row.xdelimitador || null,
+        campos: [],
+        grilla: defaultGrilla,
+        kpis: [],
+        graficos: [],
+        pasos_wizard: [],
+      };
+    } catch (error: any) {
+      this.logger.error(`Error en fallback fw_esquemas para '${slug}': ${error.message}`);
+      return { error: true, message: error.message };
+    }
+  }
+
+  async getSchema(
+    target: string | { nombreInterno: string },
+    userOrQuery?: ReportesRequestUser | null | Record<string, unknown>,
+    headersOrUser?: ReportesHeaders | ReportesRequestUser | null,
+    queryOrHeaders?: Record<string, unknown> | ReportesHeaders,
+  ): Promise<any> {
+    let slug = '';
+    let user: ReportesRequestUser | null = null;
+    let headers: ReportesHeaders | undefined = undefined;
+    let query: Record<string, unknown> | undefined = undefined;
+
+    if (typeof target === 'object' && target !== null && 'nombreInterno' in target) {
+      slug = target.nombreInterno;
+      query = userOrQuery as Record<string, unknown> | undefined;
+      user = (headersOrUser as ReportesRequestUser | null) ?? null;
+      headers = queryOrHeaders as ReportesHeaders | undefined;
+    } else {
+      slug = String(target || '');
+      user = (userOrQuery as ReportesRequestUser | null) ?? null;
+      headers = headersOrUser as ReportesHeaders | undefined;
+      query = queryOrHeaders as Record<string, unknown> | undefined;
+    }
+
+    const normalizedSlug = String(slug || '').trim().toUpperCase();
+    const cusuario = resolveCusuario({ user, headers, query });
+
+    try {
+      let rows: any[] | null = null;
+      try {
+        rows = await this.db.executeSP('generar_esquema', {
+          cusuario,
+          p_usuario: cusuario,
+          xnombre_interno: normalizedSlug,
+          p_nombre_interno: normalizedSlug,
+        });
+      } catch (spError: any) {
+        this.logger.warn(
+          `generar_esquema SP fallo para '${normalizedSlug}': ${spError.message}. Intentando fallback...`,
+        );
+        return await this.getSchemaFallbackFromMetadata(normalizedSlug);
+      }
+
+      if (!rows || rows.length === 0) {
+        this.logger.log(
+          `generar_esquema no retorno datos para '${normalizedSlug}'. Ejecutando fallback a fw_esquemas...`,
+        );
+        return await this.getSchemaFallbackFromMetadata(normalizedSlug);
+      }
+
       const row: any = rows[0];
-      const rawSchema = row.xesquema_json ?? row.esquema_json ?? row;
+      const rawSchema = row.xesquema_json ?? row.esquema_json ?? row.generar_esquema ?? row;
       let esquema: any;
       try {
         esquema = typeof rawSchema === 'string' ? JSON.parse(rawSchema) : rawSchema;
       } catch (parseErr: any) {
+        this.logger.error(`Error al parsear el esquema JSON para '${normalizedSlug}': ${parseErr.message}`);
         return { error: true, message: 'Error al parsear el esquema JSON' };
+      }
+
+      if (!esquema || typeof esquema !== 'object') {
+        return await this.getSchemaFallbackFromMetadata(normalizedSlug);
       }
 
       const campos = Array.isArray(esquema?.campos)
@@ -152,7 +302,11 @@ export class DynamicSchemasService {
       const kpis = Array.isArray(esquema?.kpis_default)
         ? esquema.kpis_default.map((k: any) => this.mapKpi(k))
         : [];
-      const grilla = Array.isArray(esquema?.grilla) ? esquema.grilla : [];
+
+      let grilla = Array.isArray(esquema?.grilla) ? esquema.grilla : [];
+      if ((!grilla || grilla.length === 0) && DEFAULT_GRID_COLUMNS_BY_SLUG[normalizedSlug]) {
+        grilla = [...DEFAULT_GRID_COLUMNS_BY_SLUG[normalizedSlug]];
+      }
 
       const pasosWizard = Array.isArray(esquema?.pasos_wizard)
         ? esquema.pasos_wizard.map((paso: any) => ({
@@ -165,8 +319,8 @@ export class DynamicSchemasService {
         : [];
 
       return {
-        nombreInterno: esquema?.xnombre_interno || esquema?.nombre_interno || slug,
-        nombre: esquema?.xtitulo_ui || esquema?.titulo_ui,
+        nombreInterno: esquema?.xnombre_interno || esquema?.nombre_interno || normalizedSlug,
+        nombre: esquema?.xtitulo_ui || esquema?.titulo_ui || normalizedSlug,
         cesquema: esquema?.cesquema ?? esquema?.id ?? null,
         icomportamiento: esquema?.icomportamiento || esquema?.comportamiento || 'ES',
         itipo: esquema?.itipo || esquema?.tipo || 'R',
@@ -180,7 +334,7 @@ export class DynamicSchemasService {
         pasos_wizard: pasosWizard,
       };
     } catch (error: any) {
-      this.logger.error(`Error ejecutando generar_esquema para '${slug}': ${error.message}`);
+      this.logger.error(`Error ejecutando generar_esquema para '${normalizedSlug}': ${error.message}`);
       return { error: true, message: error.message };
     }
   }
