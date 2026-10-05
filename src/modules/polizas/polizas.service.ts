@@ -164,6 +164,56 @@ export class PolizasService {
     return result;
   }
 
+  private async getEstatusCatalog(campo: any, aseguradoraId: number | null) {
+    const configured = String(campo?.xsp_lista || '').trim();
+    const fallback = 'sp_obtener_estatus';
+    const primary = configured || fallback;
+
+    let rows: any[] = [];
+    try {
+      rows = await this.db.executeSP(primary, {
+        p_id_aseguradora: aseguradoraId || null,
+      });
+    } catch (error: any) {
+      this.logger.warn(`Error ejecutando SP de catálogo '${primary}': ${error.message}`);
+    }
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      if (primary !== fallback) {
+        this.logger.log(`Intentando fallback '${fallback}' para catálogo de estatus`);
+        try {
+          rows = await this.db.executeSP(fallback, {
+            p_id_aseguradora: aseguradoraId || null,
+          });
+        } catch (error: any) {
+          this.logger.warn(`Error ejecutando SP de catálogo '${fallback}': ${error.message}`);
+        }
+      }
+    }
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      try {
+        rows = await this.db.executeQuery(
+          `SELECT id AS cestatus, descripcion AS xdescripcion FROM estatus WHERE activo = TRUE ORDER BY id ASC`,
+        );
+      } catch (err: any) {
+        this.logger.warn(`Error consultando tabla estatus directamente: ${err.message}`);
+      }
+    }
+
+    const list = Array.isArray(rows) ? rows : [];
+    return list
+      .map((row: any) => {
+        const desc = String(row.xdescripcion ?? row.descripcion ?? '').trim();
+        if (!desc) return null;
+        return {
+          cvalor: desc,
+          xdescripcion: desc,
+        };
+      })
+      .filter(Boolean) as { cvalor: string; xdescripcion: string }[];
+  }
+
   private async opcionesDesdeListaValoresDb(
     nombreInterno: string,
     nombreParam: string,
@@ -221,21 +271,27 @@ export class PolizasService {
 
     const campos = (schema.campos || []).filter((c: any) => !c.hidden);
     const canalCampo = findCampo(campos, 'ccanal', 'canal');
+    const estatusCampo = findCampo(campos, 'cestatus', 'estatus');
 
-    const [ramos, productores, canales, estatusDb, monedaDb] = await Promise.all([
+    const [ramos, productores, canales, estatusCatalog, estatusDb, monedaDb] = await Promise.all([
       this.getRamosCatalog(resolvedAseguradoraId),
       this.getProductoresCatalog(resolvedAseguradoraId),
       this.getCanalesCatalog(canalCampo, resolvedAseguradoraId),
+      this.getEstatusCatalog(estatusCampo, resolvedAseguradoraId),
       this.opcionesDesdeListaValoresDb('RPT_POLIZAS', 'cestatus'),
       this.opcionesDesdeListaValoresDb('RPT_POLIZAS', 'moneda'),
     ]);
 
-    const estatusCampo = findCampo(campos, 'cestatus', 'estatus');
     const monedaCampo = findCampo(campos, 'moneda', 'cmoneda');
     const estatusFromSchema = opcionesFromCampo(estatusCampo);
     const monedaFromSchema = opcionesFromCampo(monedaCampo);
 
-    const estatus = estatusDb.length > 0 ? estatusDb : estatusFromSchema;
+    const estatus =
+      estatusDb.length > 0
+        ? estatusDb
+        : estatusCatalog.length > 0
+          ? estatusCatalog
+          : estatusFromSchema;
     const moneda = monedaDb.length > 0 ? monedaDb : monedaFromSchema;
 
     return {
@@ -305,6 +361,18 @@ export class PolizasService {
       if (picked !== undefined) {
         payload.filtros[targetKey] = picked;
       }
+    }
+
+    const rawEstatus = String(payload.filtros.cestatus || '').trim();
+    if (rawEstatus) {
+      const ESTATUS_ID_TO_DESC: Record<string, string> = {
+        '1': 'NOTIFICADO',
+        '2': 'PENDIENTE',
+        '3': 'PAGADO',
+        '4': 'ANULADO',
+        '5': 'RECHAZADO',
+      };
+      payload.filtros.cestatus = ESTATUS_ID_TO_DESC[rawEstatus] ?? rawEstatus.toUpperCase();
     }
 
     const aseguradoraId = filtros.aseguradoraId ?? filtros.id_aseguradora ?? body?.aseguradoraId;
