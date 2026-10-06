@@ -1,4 +1,4 @@
-﻿import 'reflect-metadata';
+import 'reflect-metadata';
 import * as dotenv from 'dotenv';
 dotenv.config();
 
@@ -11,8 +11,9 @@ async function bootstrap() {
   const app = await NestFactory.create(DevAppModule);
   const port = process.env.PORT || 3000;
 
-  // Prefijo global de rutas (/api) para simular el core de sysip-nest-api
-  app.setGlobalPrefix('api');
+  // Prefijo global de rutas (/dynamic-reports)
+  const globalPrefix = process.env.GLOBAL_PREFIX || 'dynamic-reports';
+  app.setGlobalPrefix(globalPrefix);
 
   // Configuración de Swagger
   const config = new DocumentBuilder()
@@ -21,11 +22,11 @@ async function bootstrap() {
     .setVersion('0.1.0')
     .build();
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
+  SwaggerModule.setup(`${globalPrefix}/docs`, app, document);
 
   await app.listen(port);
-  Logger.log(`🚀 Servidor local listo en: http://localhost:${port}/api`, 'DevBootstrap');
-  Logger.log(`📖 Swagger UI disponible en: http://localhost:${port}/api/docs`, 'DevBootstrap');
+  Logger.log(`🚀 Servidor local listo en: http://localhost:${port}/${globalPrefix}`, 'DevBootstrap');
+  Logger.log(`📖 Swagger UI disponible en: http://localhost:${port}/${globalPrefix}/docs`, 'DevBootstrap');
 }
 
 bootstrap().catch((err) => {
