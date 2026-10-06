@@ -24,13 +24,14 @@ export class OriginAdapterFactory {
     const timeout = Number(
       this.config.get<number>('REPORTES_SYNC_TIMEOUT_MS', 30000),
     );
-    const rawEncrypt = this.config.get<string | boolean>('DB_ENCRYPT', false);
+    const rawEncrypt =
+      this.config.get<string | boolean>('REPORTES_PG_ENCRYPT') ??
+      this.config.get<string | boolean>('DB_ENCRYPT', false);
     const encrypt =
       rawEncrypt === true || rawEncrypt === 'true' || rawEncrypt === '1';
-    const rawTrustCert = this.config.get<string | boolean>(
-      'DB_TRUST_SERVER_CERTIFICATE',
-      true,
-    );
+    const rawTrustCert =
+      this.config.get<string | boolean>('REPORTES_PG_TRUST_SERVER_CERTIFICATE') ??
+      this.config.get<string | boolean>('DB_TRUST_SERVER_CERTIFICATE', true);
     const trustCert =
       rawTrustCert === true || rawTrustCert === 'true' || rawTrustCert === '1';
 

@@ -1,6 +1,6 @@
 {
     "name": "@ngonzalez-exe/rpt-comisiones",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "description": "Modulo partner para sysip-nest-api (La Mundial)",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",

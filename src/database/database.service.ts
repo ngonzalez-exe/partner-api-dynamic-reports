@@ -27,18 +27,47 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   constructor(private readonly configService: ConfigService) {}
 
   async onModuleInit(): Promise<void> {
-    const host = this.configService.get<string>('DB_HOST');
-    const port = Number(this.configService.get<number | string>('DB_PORT', 5432));
-    const user = this.configService.get<string>('DB_USER');
-    const password = this.configService.get<string>('DB_PASSWORD');
-    const database = this.configService.get<string>('DB_NAME');
-    this.defaultSchema = this.configService.get<string>('DB_SCHEMA', 'public');
-    const encryptRaw = this.configService.get<string | boolean>('DB_ENCRYPT', false);
+    const enabledRaw = this.configService.get<string | boolean>('REPORTES_ENABLED', true);
+    const isEnabled = enabledRaw === true || enabledRaw === 'true' || enabledRaw === '1';
+
+    if (!isEnabled) {
+      this.logger.warn(
+        'Módulo de reportes deshabilitado (REPORTES_ENABLED=false). No se inicializará el pool de conexiones PostgreSQL.',
+      );
+      return;
+    }
+
+    const host =
+      this.configService.get<string>('REPORTES_PG_HOST') ||
+      this.configService.get<string>('DB_HOST');
+    const port = Number(
+      this.configService.get<number | string>('REPORTES_PG_PORT') ||
+      this.configService.get<number | string>('DB_PORT', 5432),
+    );
+    const database =
+      this.configService.get<string>('REPORTES_PG_DATABASE') ||
+      this.configService.get<string>('DB_NAME');
+    const user =
+      this.configService.get<string>('REPORTES_PG_USER') ||
+      this.configService.get<string>('DB_USER');
+    const password =
+      this.configService.get<string>('REPORTES_PG_PASSWORD') ||
+      this.configService.get<string>('DB_PASSWORD');
+    this.defaultSchema =
+      this.configService.get<string>('REPORTES_PG_SCHEMA') ||
+      this.configService.get<string>('DB_SCHEMA', 'public');
+    const encryptRaw =
+      this.configService.get<string | boolean>('REPORTES_PG_ENCRYPT') ??
+      this.configService.get<string | boolean>('DB_ENCRYPT', false);
     const encrypt = encryptRaw === true || encryptRaw === 'true' || encryptRaw === '1';
+    const trustCertRaw =
+      this.configService.get<string | boolean>('REPORTES_PG_TRUST_SERVER_CERTIFICATE') ??
+      this.configService.get<string | boolean>('DB_TRUST_SERVER_CERTIFICATE', true);
+    const trustCert = trustCertRaw === true || trustCertRaw === 'true' || trustCertRaw === '1';
 
     if (!host || !user || !password || !database) {
       this.logger.warn(
-        'Faltan variables de entorno de conexion a PostgreSQL (DB_HOST, DB_USER, DB_PASSWORD, DB_NAME). Verifica tu archivo .env.',
+        'Faltan variables de entorno de conexion a PostgreSQL (REPORTES_PG_HOST, REPORTES_PG_USER, REPORTES_PG_PASSWORD, REPORTES_PG_DATABASE). Verifica tu archivo .env.',
       );
     }
 
@@ -48,7 +77,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       user,
       password,
       database,
-      ssl: encrypt ? { rejectUnauthorized: false } : false,
+      ssl: encrypt ? { rejectUnauthorized: !trustCert } : false,
       max: 20,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,
@@ -124,6 +153,11 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     sql: string,
     params?: Record<string, unknown>,
   ): Promise<T[]> {
+    if (!this.pool) {
+      throw new Error(
+        'DatabaseService no está disponible o el pool de PostgreSQL no fue inicializado (REPORTES_ENABLED=false).',
+      );
+    }
     const { transformedSql, values } = this.transformNamedParameters(sql, params);
 
     return this.runWithRetry(async () => {
@@ -140,6 +174,11 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     routineName: string,
     params?: Record<string, unknown>,
   ): Promise<T[]> {
+    if (!this.pool) {
+      throw new Error(
+        'DatabaseService no está disponible o el pool de PostgreSQL no fue inicializado (REPORTES_ENABLED=false).',
+      );
+    }
     let schema = this.defaultSchema;
     let pureRoutine = routineName;
 

@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from './database.service';
 
 export interface ReportesQuerySuccess {
@@ -19,10 +20,14 @@ export type ReportesQueryResult = ReportesQuerySuccess | ReportesQueryError;
 export class ReportesPgService {
   private readonly logger = new Logger(ReportesPgService.name);
 
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly configService: ConfigService,
+  ) {}
 
   isEnabled(): boolean {
-    return true;
+    const raw = this.configService.get<string | boolean>('REPORTES_ENABLED', true);
+    return raw === true || raw === 'true' || raw === '1';
   }
 
   async executeQuery(
