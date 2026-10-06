@@ -1,14 +1,18 @@
 import {
   BadRequestException,
+  Body,
   Controller,
+  Delete,
   Get,
   Headers,
   HttpCode,
   HttpStatus,
   Param,
+  ParseIntPipe,
+  Post,
   Query,
 } from '@nestjs/common';
-import { ApiHeader, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiHeader, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { PARTNER_SWAGGER_TAG } from '@jsotoexelixitech/nest-api-sdk';
 import { DynamicSchemasService } from './dynamic-schemas.service';
 import {
@@ -77,4 +81,98 @@ export class DynamicSchemasController {
     this.throwIfError(data);
     return { status: true, data };
   }
+
+  @Get(':nombreInterno/configuracion')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Obtener configuración KPIs/gráficos' })
+  async getConfiguracion(
+    @Param('nombreInterno') nombreInterno: string,
+    @Query() query: Record<string, unknown>,
+    @Headers() headers: ReportesHeaders,
+  ) {
+    const data = await this.service.getConfiguracion(
+      { nombreInterno },
+      query,
+      asUser(headers),
+      headers,
+    );
+    this.throwIfError(data);
+    return { status: true, data };
+  }
+
+  @Post(':nombreInterno/configuracion')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Guardar configuración' })
+  @ApiBody({ schema: { type: 'object', additionalProperties: true } })
+  async saveConfiguracion(
+    @Param('nombreInterno') nombreInterno: string,
+    @Body() body: Record<string, unknown>,
+    @Headers() headers: ReportesHeaders,
+  ) {
+    const data = await this.service.saveVistaConfiguracion(
+      { nombreInterno },
+      body || {},
+      asUser(headers),
+      headers,
+    );
+    this.throwIfError(data);
+    return { status: true, data };
+  }
+
+  @Get(':nombreInterno/vista-configuracion')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Listar vistas de configuración' })
+  async getVistasConfiguracion(
+    @Param('nombreInterno') nombreInterno: string,
+    @Query() query: Record<string, unknown>,
+    @Headers() headers: ReportesHeaders,
+  ) {
+    const data = await this.service.getVistasConfiguracion(
+      { nombreInterno },
+      query,
+      asUser(headers),
+      headers,
+    );
+    this.throwIfError(data);
+    return { status: true, data };
+  }
+
+  @Post(':nombreInterno/vista-configuracion')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Guardar vista de configuración' })
+  @ApiBody({ schema: { type: 'object', additionalProperties: true } })
+  async saveVistaConfiguracion(
+    @Param('nombreInterno') nombreInterno: string,
+    @Body() body: Record<string, unknown>,
+    @Headers() headers: ReportesHeaders,
+  ) {
+    const data = await this.service.saveVistaConfiguracion(
+      { nombreInterno },
+      body || {},
+      asUser(headers),
+      headers,
+    );
+    this.throwIfError(data);
+    return { status: true, data };
+  }
+
+  @Delete(':nombreInterno/vista-configuracion/:cconfiguracion')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Eliminar vista de configuración' })
+  async deleteVistaConfiguracion(
+    @Param('nombreInterno') nombreInterno: string,
+    @Param('cconfiguracion', ParseIntPipe) cconfiguracion: number,
+    @Query() query: Record<string, unknown>,
+    @Headers() headers: ReportesHeaders,
+  ) {
+    const data = await this.service.deleteVistaConfiguracion(
+      { nombreInterno, cconfiguracion },
+      query,
+      asUser(headers),
+      headers,
+    );
+    this.throwIfError(data);
+    return { status: true, data };
+  }
 }
+

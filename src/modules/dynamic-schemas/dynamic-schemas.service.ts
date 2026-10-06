@@ -464,5 +464,297 @@ export class DynamicSchemasService {
     const grid = result.recordsets?.[0] || [];
     return { grid, kpis: [], graphics: {} };
   }
+
+  async getCesquemaByNombre(nombreInterno: string): Promise<number | null> {
+    try {
+      const rows = await this.db.executeQuery(
+        `SELECT id AS cesquema FROM esquemas WHERE UPPER(nombre_interno) = UPPER(@xnombre_interno) LIMIT 1`,
+        { xnombre_interno: nombreInterno },
+      );
+      if (!rows || rows.length === 0) return null;
+      const id = Number(rows[0]?.cesquema);
+      return Number.isFinite(id) ? id : null;
+    } catch (error: any) {
+      this.logger.error(`getCesquemaByNombre failed for '${nombreInterno}': ${error.message}`);
+      return null;
+    }
+  }
+
+  async resolveSchemaCusuario(
+    cesquema: number,
+    user?: ReportesRequestUser | null,
+    source?: Record<string, unknown>,
+    headers?: ReportesHeaders,
+  ): Promise<number | null> {
+    const cusuario = resolveCusuario({
+      user,
+      body: source,
+      query: source,
+      headers,
+    });
+    if (Number.isFinite(cusuario)) return cusuario;
+    if (!Number.isFinite(cesquema)) return 123;
+
+    try {
+      const lastSaved = await this.db.executeQuery(
+        `SELECT usuario AS cusuario
+         FROM configuraciones
+         WHERE id_esquema = @cesquema
+           AND activo = TRUE
+           AND usuario IS NOT NULL
+         ORDER BY por_defecto DESC, fecha_modificacion DESC NULLS LAST, fecha_ingreso DESC, id DESC
+         LIMIT 1`,
+        { cesquema },
+      );
+      if (lastSaved && lastSaved.length > 0) {
+        const fallback = Number(lastSaved[0]?.cusuario);
+        if (Number.isFinite(fallback)) return fallback;
+      }
+    } catch (_) {}
+
+    return 123;
+  }
+
+  async getConfiguracion(
+    params: { nombreInterno: string },
+    query?: Record<string, unknown>,
+    user?: ReportesRequestUser | null,
+    headers?: ReportesHeaders,
+  ): Promise<any> {
+    const slug = String(params.nombreInterno || '').trim().toUpperCase();
+    const cesquema = await this.getCesquemaByNombre(slug);
+    if (!cesquema) return { error: true, message: 'Esquema no encontrado' };
+
+    const [kpis, graficos] = await Promise.all([
+      this.loadKpisFromDb(slug),
+      this.loadGraficosFromDb(slug),
+    ]);
+
+    return {
+      cesquema,
+      nombreInterno: slug,
+      kpis,
+      graficos,
+    };
+  }
+
+  async getVistasConfiguracion(
+    params: { nombreInterno: string },
+    query?: Record<string, unknown>,
+    user?: ReportesRequestUser | null,
+    headers?: ReportesHeaders,
+  ): Promise<any> {
+    const slug = String(params.nombreInterno || '').trim().toUpperCase();
+    const cesquema = await this.getCesquemaByNombre(slug);
+    if (!cesquema) return { error: true, message: 'Esquema no encontrado' };
+
+    const cusuario = await this.resolveSchemaCusuario(cesquema, user, query, headers);
+
+    try {
+      const rows = await this.db.executeQuery(
+        `SELECT id AS cconfiguracion,
+                id AS id,
+                id_esquema AS cesquema,
+                usuario AS cusuario,
+                nombre_vista AS xnombre_vista,
+                nombre_vista AS nombre_vista,
+                por_defecto AS bpor_defecto,
+                por_defecto AS por_defecto,
+                configuracion_json AS xconfiguracion_json,
+                configuracion_json AS configuracion,
+                activo AS bactivo,
+                fecha_ingreso AS fingreso,
+                fecha_ingreso AS fecha_ingreso,
+                fecha_modificacion AS fultmod
+         FROM configuraciones
+         WHERE id_esquema = @cesquema
+           AND (usuario = @cusuarioStr OR usuario = @cusuarioNum)
+           AND activo = TRUE
+         ORDER BY por_defecto DESC, fecha_ingreso DESC`,
+        {
+          cesquema,
+          cusuarioStr: String(cusuario),
+          cusuarioNum: cusuario,
+        },
+      );
+      return Array.isArray(rows) ? rows : [];
+    } catch (error: any) {
+      this.logger.error(`getVistasConfiguracion failed for '${slug}': ${error.message}`);
+      return [];
+    }
+  }
+
+  async saveVistaConfiguracion(
+    params: { nombreInterno: string },
+    body?: Record<string, unknown>,
+    user?: ReportesRequestUser | null,
+    headers?: ReportesHeaders,
+  ): Promise<any> {
+    const slug = String(params.nombreInterno || '').trim().toUpperCase();
+    const cesquema = await this.getCesquemaByNombre(slug);
+    if (!cesquema) return { error: true, message: 'Esquema no encontrado' };
+
+    const cusuario = resolveCusuario({ user, body, headers }) ?? 123;
+    const cusuarioStr = String(cusuario);
+
+    const nombreVistaRaw = typeof body?.xnombre_vista === 'string'
+      ? body.xnombre_vista.trim()
+      : typeof body?.nombre_vista === 'string'
+        ? body.nombre_vista.trim()
+        : '';
+    const xnombre_vista = nombreVistaRaw || 'Mi configuración';
+    const bpor_defecto = body?.bpor_defecto === true || body?.por_defecto === true;
+    const configuracion = body?.configuracion && typeof body.configuracion === 'object'
+      ? body.configuracion
+      : body;
+    const xconfiguracion_json = typeof configuracion === 'string' ? configuracion : JSON.stringify(configuracion || {});
+
+    try {
+      const existing = await this.db.executeQuery(
+        `SELECT id AS cconfiguracion
+         FROM configuraciones
+         WHERE id_esquema = @cesquema
+           AND usuario = @cusuarioStr
+           AND nombre_vista = @xnombre_vista
+           AND activo = TRUE
+         ORDER BY id DESC
+         LIMIT 1`,
+        { cesquema, cusuarioStr, xnombre_vista },
+      );
+
+      let cconfiguracion = existing && existing.length > 0 ? Number(existing[0]?.cconfiguracion) : null;
+
+      if (cconfiguracion) {
+        await this.db.executeQuery(
+          `UPDATE configuraciones
+           SET configuracion_json = @xconfiguracion_json,
+               por_defecto = @bpor_defecto,
+               fecha_modificacion = CURRENT_TIMESTAMP,
+               usuario_modificacion = @cusuarioStr
+           WHERE id = @cconfiguracion`,
+          { cconfiguracion, xconfiguracion_json, bpor_defecto, cusuarioStr },
+        );
+      } else {
+        const inserted = await this.db.executeQuery(
+          `INSERT INTO configuraciones (
+             id_esquema,
+             usuario,
+             nombre_vista,
+             por_defecto,
+             configuracion_json,
+             activo,
+             fuente,
+             programa,
+             bok,
+             error,
+             fecha_ingreso,
+             categoria
+           )
+           VALUES (
+             @cesquema,
+             @cusuarioStr,
+             @xnombre_vista,
+             @bpor_defecto,
+             @xconfiguracion_json,
+             TRUE,
+             'WEB',
+             'RPT_DINAMICO',
+             0,
+             0,
+             CURRENT_TIMESTAMP,
+             0
+           )
+           RETURNING id AS cconfiguracion`,
+          { cesquema, cusuarioStr, xnombre_vista, bpor_defecto, xconfiguracion_json },
+        );
+        cconfiguracion = inserted && inserted.length > 0 ? Number(inserted[0]?.cconfiguracion) : null;
+      }
+
+      if (bpor_defecto && cconfiguracion) {
+        await this.db.executeQuery(
+          `UPDATE configuraciones
+           SET por_defecto = FALSE
+           WHERE id_esquema = @cesquema
+             AND usuario = @cusuarioStr
+             AND id <> @cconfiguracion
+             AND activo = TRUE`,
+          { cesquema, cusuarioStr, cconfiguracion },
+        );
+      }
+
+      const saved = await this.db.executeQuery(
+        `SELECT
+           id AS cconfiguracion,
+           id AS id,
+           id_esquema AS cesquema,
+           usuario AS cusuario,
+           nombre_vista AS xnombre_vista,
+           nombre_vista AS nombre_vista,
+           por_defecto AS bpor_defecto,
+           por_defecto AS por_defecto,
+           configuracion_json AS xconfiguracion_json,
+           configuracion_json AS configuracion,
+           activo AS bactivo,
+           fecha_ingreso AS fingreso,
+           fecha_ingreso AS fecha_ingreso,
+           fecha_modificacion AS fultmod
+         FROM configuraciones
+         WHERE id = @cconfiguracion
+         LIMIT 1`,
+        { cconfiguracion },
+      );
+
+      return (saved && saved[0]) || {
+        cconfiguracion,
+        id: cconfiguracion,
+        cesquema,
+        cusuario: cusuarioStr,
+        xnombre_vista,
+        nombre_vista: xnombre_vista,
+        bpor_defecto,
+        por_defecto: bpor_defecto,
+        xconfiguracion_json,
+        configuracion: xconfiguracion_json,
+        bactivo: true,
+      };
+    } catch (error: any) {
+      this.logger.error(`saveVistaConfiguracion failed for '${slug}': ${error.message}`);
+      return { error: true, message: error.message };
+    }
+  }
+
+  async deleteVistaConfiguracion(
+    params: { nombreInterno: string; cconfiguracion: number },
+    query?: Record<string, unknown>,
+    user?: ReportesRequestUser | null,
+    headers?: ReportesHeaders,
+  ): Promise<any> {
+    const slug = String(params.nombreInterno || '').trim().toUpperCase();
+    const cesquema = await this.getCesquemaByNombre(slug);
+    if (!cesquema) return { error: true, message: 'Esquema no encontrado' };
+
+    const cusuario = await this.resolveSchemaCusuario(cesquema, user, query, headers);
+    const cconfiguracion = Number(params.cconfiguracion);
+    if (!Number.isFinite(cconfiguracion) || cconfiguracion <= 0) {
+      return { error: true, message: 'Identificador de configuración inválido' };
+    }
+
+    try {
+      await this.db.executeQuery(
+        `UPDATE configuraciones
+         SET activo = FALSE,
+             fecha_modificacion = CURRENT_TIMESTAMP,
+             usuario_modificacion = @cusuarioStr
+         WHERE id = @cconfiguracion
+           AND id_esquema = @cesquema
+           AND activo = TRUE`,
+        { cconfiguracion, cesquema, cusuarioStr: String(cusuario) },
+      );
+      return { cconfiguracion, eliminado: true };
+    } catch (error: any) {
+      this.logger.error(`deleteVistaConfiguracion failed for id '${cconfiguracion}': ${error.message}`);
+      return { error: true, message: error.message };
+    }
+  }
 }
 

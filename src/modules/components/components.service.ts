@@ -208,11 +208,12 @@ export class ComponentsService {
     headers: ReportesHeaders,
   ): Promise<any> {
     this.logger.log(`[getConfiguracion] slug=${slug}, user=${user?.cusuario}`);
-    return {
-      slug,
-      kpis: [],
-      graficos: [],
-    };
+    return this.dynamicSchemasService.getConfiguracion(
+      { nombreInterno: slug },
+      query,
+      user,
+      headers,
+    );
   }
 
   async saveConfiguracion(
@@ -222,10 +223,12 @@ export class ComponentsService {
     headers: ReportesHeaders,
   ): Promise<any> {
     this.logger.log(`[saveConfiguracion] slug=${slug}, user=${user?.cusuario}`);
-    return {
-      slug,
-      saved: true,
-    };
+    return this.dynamicSchemasService.saveVistaConfiguracion(
+      { nombreInterno: slug },
+      body,
+      user,
+      headers,
+    );
   }
 
   async getVistasConfiguracion(
@@ -235,10 +238,12 @@ export class ComponentsService {
     headers: ReportesHeaders,
   ): Promise<any> {
     this.logger.log(`[getVistasConfiguracion] slug=${slug}, user=${user?.cusuario}`);
-    return {
-      slug,
-      vistas: [],
-    };
+    return this.dynamicSchemasService.getVistasConfiguracion(
+      { nombreInterno: slug },
+      query,
+      user,
+      headers,
+    );
   }
 
   async deleteVistaConfiguracion(
@@ -251,11 +256,12 @@ export class ComponentsService {
     this.logger.log(
       `[deleteVistaConfiguracion] slug=${slug}, cconfiguracion=${cconfiguracion}, user=${user?.cusuario}`,
     );
-    return {
-      slug,
-      cconfiguracion,
-      deleted: true,
-    };
+    return this.dynamicSchemasService.deleteVistaConfiguracion(
+      { nombreInterno: slug, cconfiguracion },
+      query,
+      user,
+      headers,
+    );
   }
 
   async exportData(
