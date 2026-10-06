@@ -30,7 +30,11 @@ function asUser(headers: ReportesHeaders): ReportesRequestUser | null {
 }
 
 @ApiTags(PARTNER_SWAGGER_TAG)
-@Controller('v1/components')
+@Controller([
+  'dynamic-reports/v1/components',
+  'v1/partner/dynamic-reports/components',
+  'v1/partner/rpt-comisiones/components',
+])
 export class ComponentsController {
   constructor(private readonly service: ComponentsService) {}
 

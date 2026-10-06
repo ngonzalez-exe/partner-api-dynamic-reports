@@ -30,7 +30,11 @@ function asUser(headers: ReportesHeaders): ReportesRequestUser | null {
 }
 
 @ApiTags(PARTNER_SWAGGER_TAG)
-@Controller('v1/dynamic-schemas')
+@Controller([
+  'dynamic-reports/v1/dynamic-schemas',
+  'v1/partner/dynamic-reports/dynamic-schemas',
+  'v1/partner/rpt-comisiones/dynamic-schemas',
+])
 export class DynamicSchemasController {
   constructor(private readonly service: DynamicSchemasService) {}
 

@@ -8,7 +8,10 @@ import {
 import { DatabaseService } from '../../database/database.service';
 
 @ApiTags(PARTNER_SWAGGER_TAG)
-@Controller('v1/partner/starter')
+@Controller([
+  'v1/partner/rpt-comisiones',
+  'dynamic-reports/v1/health',
+])
 export class PartnerStarterController {
   constructor(
     @Inject(EXELIXI_PARTNER_HOST)
