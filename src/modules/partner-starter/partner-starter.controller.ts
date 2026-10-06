@@ -25,14 +25,14 @@ export class PartnerStarterController {
   @ApiResponse({
     status: 200,
     schema: {
-      example: { status: true, module: '@exelixi/partner-api-starter', env: 'development' },
+      example: { status: true, module: '@ngonzalez-exe/rpt-comisiones', env: 'development' },
     },
   })
   health() {
     this.host.log('log', 'GET /partner/starter/health', 'PartnerStarter');
     return {
       status: true,
-      module: '@exelixi/partner-api-starter',
+      module: '@ngonzalez-exe/rpt-comisiones',
       env: this.host.getConfig('NODE_ENV') ?? 'unknown',
     };
   }

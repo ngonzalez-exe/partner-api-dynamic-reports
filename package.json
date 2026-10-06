@@ -1,13 +1,18 @@
 {
-    "name": "@exelixi/rpt-comisiones",
+    "name": "@ngonzalez-exe/rpt-comisiones",
     "version": "0.1.0",
     "description": "Modulo partner para sysip-nest-api (La Mundial)",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/ngonzalez-exe/partner-api-dynamic-reports.git"
+    },
     "files": [
         "dist"
     ],
     "scripts": {
+        "prebuild": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
         "build": "tsc -p tsconfig.json",
         "prepublishOnly": "npm run build",
         "start:dev": "nodemon"
