@@ -364,7 +364,7 @@ export class SyncUpsertRepository {
     await this.exec(
       `INSERT INTO comision (
        id_aseguradora, origen_clave, numero_poliza, numero_recibo, id_ramo, ramo,
-       poliza_origen, cedula_tomador, nombre_tomador, cedula_asegurado, nombre_asegurado,
+       cedula_tomador, nombre_tomador, cedula_asegurado, nombre_asegurado,
        fecha_emision_recibo, fecha_desde_recibo, fecha_hasta_recibo, dias_vigencia,
        estado_recibo, estado_recibo_desc, fecha_cobro_recibo, numero_ingreso,
        moneda_recibo, suma_asegurada, suma_asegurada_ext, monto_recibo_bruto,
@@ -374,11 +374,11 @@ export class SyncUpsertRepository {
        monto_movimiento, monto_movimiento_bs, monto_movimiento_ext,
        porcentaje_comision, porcentaje_islr, monto_islr, moneda_cobro, moneda_pago,
        tasa_cobro, numero_orden_pago, banco, referencia_bancaria, fecha_pago_comision,
-       monto_sustraendo, monto_orden, monto_neto_orden, monto_islr_orden,
+       monto_sustraendo, monto_neto_orden, monto_islr_orden,
        monto_bruto_orden, origen_modified_at, synced_at
      ) VALUES (
        @aseguradoraId, @origenClave, @numeroPoliza, @numeroRecibo, @idRamo, @ramo,
-       @polizaOrigen, @cedulaTomador, @nombreTomador, @cedulaAsegurado, @nombreAsegurado,
+       @cedulaTomador, @nombreTomador, @cedulaAsegurado, @nombreAsegurado,
        @fechaEmisionRecibo, @fechaDesdeRecibo, @fechaHastaRecibo, @diasVigencia,
        @estadoRecibo, @estadoReciboDesc, @fechaCobroRecibo, @numeroIngreso,
        @monedaRecibo, @sumaAsegurada, @sumaAseguradaExt, @montoReciboBruto,
@@ -388,7 +388,7 @@ export class SyncUpsertRepository {
        @montoMovimiento, @montoMovimientoBs, @montoMovimientoExt,
        @porcentajeComision, @porcentajeIslr, @montoIslr, @monedaCobro, @monedaPago,
        @tasaCobro, @numeroOrdenPago, @banco, @referenciaBancaria, @fechaPagoComision,
-       @montoSustraendo, @montoOrden, @montoNetoOrden, @montoIslrOrden,
+       @montoSustraendo, @montoNetoOrden, @montoIslrOrden,
        @montoBrutoOrden, @origenModifiedAt, NOW()
      )
      ON CONFLICT (id_aseguradora, origen_clave)
@@ -397,7 +397,6 @@ export class SyncUpsertRepository {
        numero_recibo = EXCLUDED.numero_recibo,
        id_ramo = EXCLUDED.id_ramo,
        ramo = EXCLUDED.ramo,
-       poliza_origen = EXCLUDED.poliza_origen,
        cedula_tomador = EXCLUDED.cedula_tomador,
        nombre_tomador = EXCLUDED.nombre_tomador,
        cedula_asegurado = EXCLUDED.cedula_asegurado,
@@ -439,7 +438,6 @@ export class SyncUpsertRepository {
        referencia_bancaria = EXCLUDED.referencia_bancaria,
        fecha_pago_comision = EXCLUDED.fecha_pago_comision,
        monto_sustraendo = EXCLUDED.monto_sustraendo,
-       monto_orden = EXCLUDED.monto_orden,
        monto_neto_orden = EXCLUDED.monto_neto_orden,
        monto_islr_orden = EXCLUDED.monto_islr_orden,
        monto_bruto_orden = EXCLUDED.monto_bruto_orden,
@@ -452,7 +450,6 @@ export class SyncUpsertRepository {
         numeroRecibo: row.numeroRecibo,
         idRamo: row.idRamo,
         ramo: row.ramo,
-        polizaOrigen: row.polizaOrigen,
         cedulaTomador: row.cedulaTomador,
         nombreTomador: row.nombreTomador,
         cedulaAsegurado: row.cedulaAsegurado,
@@ -494,7 +491,6 @@ export class SyncUpsertRepository {
         referenciaBancaria: row.referenciaBancaria,
         fechaPagoComision: row.fechaPagoComision,
         montoSustraendo: row.montoSustraendo,
-        montoOrden: row.montoOrden,
         montoNetoOrden: row.montoNetoOrden,
         montoIslrOrden: row.montoIslrOrden,
         montoBrutoOrden: row.montoBrutoOrden,
