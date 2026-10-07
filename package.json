@@ -43,6 +43,7 @@
     },
     "license": "UNLICENSED",
     "dependencies": {
+        "@google/genai": "^2.27.0",
         "@nestjs/config": "^3.3.0",
         "mssql": "^12.7.2",
         "pg": "^8.23.0"

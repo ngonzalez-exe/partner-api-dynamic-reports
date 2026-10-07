@@ -6,6 +6,7 @@ export { ComponentsService } from './modules/components/components.service';
 export { DynamicSchemasModule } from './modules/dynamic-schemas/dynamic-schemas.module';
 export { DynamicSchemasService } from './modules/dynamic-schemas/dynamic-schemas.service';
 export { DynamicSchemasController } from './modules/dynamic-schemas/dynamic-schemas.controller';
+export { GeminiService } from './modules/dynamic-schemas/insights/gemini.service';
 export { PolizasModule } from './modules/polizas/polizas.module';
 export { PolizasService, POLIZAS_COLUMN_ORDER } from './modules/polizas/polizas.service';
 export { ComisionesModule } from './modules/comisiones/comisiones.module';

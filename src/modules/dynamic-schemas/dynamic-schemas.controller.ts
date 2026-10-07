@@ -178,5 +178,21 @@ export class DynamicSchemasController {
     this.throwIfError(data);
     return { status: true, data };
   }
+
+  @Post(':nombreInterno/insights')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Insights IA del esquema' })
+  @ApiBody({ schema: { type: 'object', additionalProperties: true } })
+  async getInsights(
+    @Param('nombreInterno') nombreInterno: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    const data = await this.service.getInsights(
+      { nombreInterno },
+      body || {},
+    );
+    return { status: true, data };
+  }
 }
+
 

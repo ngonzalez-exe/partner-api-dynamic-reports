@@ -8,6 +8,8 @@ import {
 import {
   DEFAULT_GRID_COLUMNS_BY_SLUG,
 } from './constants/default-columns.constants';
+import { GeminiService } from './insights/gemini.service';
+import { buildBloques, bloqueAInsight } from './insights/insights-engine';
 
 const TIPO_CONTROL_MAP: Record<string, string> = {
   DATE: 'date',
@@ -29,7 +31,10 @@ const ORDEN_INFINITO = Number.MAX_SAFE_INTEGER;
 export class DynamicSchemasService {
   private readonly logger = new Logger(DynamicSchemasService.name);
 
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly geminiService: GeminiService,
+  ) {}
 
   mapCampo(c: any) {
     const campo: Record<string, any> = {
@@ -755,6 +760,50 @@ export class DynamicSchemasService {
       this.logger.error(`deleteVistaConfiguracion failed for id '${cconfiguracion}': ${error.message}`);
       return { error: true, message: error.message };
     }
+  }
+
+  async getInsights(
+    params: { nombreInterno: string },
+    body: Record<string, unknown>,
+  ): Promise<{ slug: string; insights: any[]; analisisIA: any }> {
+    const slug = String(params.nombreInterno || '').trim().toUpperCase();
+    this.logger.log(`[getInsights] Generando insights para slug=${slug}`);
+
+    let promptBase: string | null = null;
+    try {
+      const rows = await this.db.executeQuery<{ prompt_contexto_ia?: string; xprompt_contexto_ia?: string }>(
+        'SELECT prompt_contexto_ia FROM esquemas WHERE UPPER(nombre_interno) = @xnombre_interno',
+        { xnombre_interno: slug },
+      );
+      const row = rows && rows[0];
+      const promptVal = row?.prompt_contexto_ia || row?.xprompt_contexto_ia;
+      if (typeof promptVal === 'string' && promptVal.trim()) {
+        promptBase = promptVal.trim();
+      }
+    } catch (err: any) {
+      this.logger.warn(`No se pudo consultar prompt_contexto_ia para ${slug}: ${err.message}`);
+    }
+
+    const kpisRaw = body.kpis;
+    const kpis = Array.isArray(kpisRaw)
+      ? kpisRaw
+      : kpisRaw && typeof kpisRaw === 'object'
+        ? [kpisRaw]
+        : [];
+
+    const graphics = (body.graphics && typeof body.graphics === 'object') ? body.graphics : {};
+    const meta = (body.meta && typeof body.meta === 'object') ? body.meta : {};
+
+    const bloques = buildBloques({ kpis, graphics, meta });
+    const insights = Array.isArray(bloques) ? bloques.map(bloqueAInsight) : [];
+
+    const analisisIA = await this.geminiService.generateInsights(promptBase, insights, slug);
+
+    return {
+      slug,
+      insights,
+      analisisIA,
+    };
   }
 }
 

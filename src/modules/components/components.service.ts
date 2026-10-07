@@ -284,9 +284,11 @@ export class ComponentsService {
     headers: ReportesHeaders,
   ): Promise<any> {
     this.logger.log(`[getInsights] slug=${slug}, user=${user?.cusuario}`);
-    return {
-      slug,
-      insights: [],
-    };
+    const enrichedBody = await this.enrichBodyWithAseguradora(body, headers);
+    return this.dynamicSchemasService.getInsights(
+      { nombreInterno: slug },
+      enrichedBody,
+    );
   }
 }
+
